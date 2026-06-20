@@ -8,7 +8,7 @@ Struttura
 raw_data/           Dati grezzi di input (CSV/XLSX)
 reports_templates/  Template Excel di riferimento
 src/                Codice Python per la generazione dei report
-output/             Report Excel generati (escluso da git)
+output/             Report Excel generati (inclusi nei commit)
 
 Setup
 -----

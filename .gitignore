@@ -6,9 +6,6 @@ __pycache__/
 venv/
 env/
 
-# Output generati
-output/
-
 # OS
 .DS_Store
 Thumbs.db
