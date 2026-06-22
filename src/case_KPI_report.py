@@ -24,7 +24,6 @@ from openpyxl.chart import BarChart, Reference
 from openpyxl.drawing.spreadsheet_drawing import TwoCellAnchor, AnchorMarker
 
 # ── Parametri ─────────────────────────────────────────────────────────────────
-WORKING_DAYS      = 22
 DEFAULT_TGT_PHONE = 19.98
 DEFAULT_TGT_NL    = 18.96
 TOP_N_CASETYPE    = 20
@@ -33,12 +32,13 @@ TOP_N_PRIMCAT     = 15
 NON_LIVE_CHANNELS = {"Contact Us", "Market Management", "Others", "Email"}
 PHONE_CHANNELS    = {"Phone"}
 
-# ── Colori (dal template) ─────────────────────────────────────────────────────
+# ── Colori ────────────────────────────────────────────────────────────────────
 C_HDR_BG  = "000099"   # blu scuro intestazioni
 C_HDR_FG  = "FFFFFF"   # bianco testo
 C_ROW_ALT = "D9E1F2"   # azzurro chiaro righe alternate
-C_ABOVE   = "FF0000"   # rosso AHT sopra target (non usato nel fill, solo riferimento)
-C_BELOW   = "70AD47"   # verde AHT sotto target
+C_ACT_BG  = "FFC000"   # giallo — Actionable
+C_HA_BG   = "C00000"   # rosso scuro — Highly Actionable
+C_HA_FG   = "FFFFFF"   # bianco su rosso scuro
 
 THIN   = Side(style="thin", color="BFBFBF")
 BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -94,42 +94,78 @@ def aggregate(df, aht_col, cases_col, group_col, target, top_n):
 
 # ── Scrittura foglio Case Type Analysis ───────────────────────────────────────
 
-def write_analysis_sheet(ws, case_types, primary_cats):
+def write_analysis_sheet(ws, case_types, primary_cats, channel_label="(Tutto)"):
 
-    def _write_table(ws, data, start_col, headers, n_header_row=1):
+    def _write_table(data, start_col, headers, start_row=1):
         """Scrive intestazioni + dati, restituisce n righe dati."""
         for i, h in enumerate(headers):
-            _cell(ws, n_header_row, start_col + i, h,
+            _cell(ws, start_row, start_col + i, h,
                   bold=True, bg=C_HDR_BG, fg=C_HDR_FG)
         for row_i, row in data.iterrows():
-            xl_row = n_header_row + 1 + row_i
+            xl_row = start_row + 1 + row_i
             bg = C_ROW_ALT if row_i % 2 == 0 else None
-            vals = list(row)
-            fmts = ["", "0.00", "0", "0.00"]
+            vals  = list(row)
+            fmts  = ["", "0.00", "0", "0.00"]
             aligns = ["left"] + ["center"] * (len(headers) - 1)
             for c_i, (val, fmt, al) in enumerate(zip(vals, fmts, aligns)):
                 _cell(ws, xl_row, start_col + c_i, val,
                       bg=bg, fmt=fmt if fmt else None, align=al)
         return len(data)
 
-    # Sezione Case Type (colonne G=7 – J=10)
-    n_ct = _write_table(ws, case_types[["label", "avg_aht", "volume", "target"]],
+    # ── A) Left pivot (colonne A=1 – C=3) ────────────────────────────────────
+    _cell(ws, 2, 1, "Case Origin (group)", align="left")
+    _cell(ws, 2, 2, channel_label, align="center")
+    _cell(ws, 3, 1, "case_number", align="left")
+    _cell(ws, 3, 2, "(Tutto)", align="center")
+
+    # intestazioni pivot
+    _cell(ws, 5, 1, "Etichette di riga", align="left")
+    _cell(ws, 5, 2, "aht", align="center")
+    _cell(ws, 5, 3, "volume", align="center")
+
+    for i, row in case_types.iterrows():
+        xl_row = 6 + i
+        bg = C_ROW_ALT if i % 2 == 0 else None
+        _cell(ws, xl_row, 1, row["label"],          align="left",   bg=bg)
+        _cell(ws, xl_row, 2, round(row["avg_aht"], 2), fmt="0.00", bg=bg)
+        _cell(ws, xl_row, 3, int(row["volume"]),    align="center", bg=bg)
+
+    # ── B) Actionable / Highly Actionable labels (colonne L=12 – N=14) ───────
+    ws.merge_cells("L2:N2")
+    _cell(ws, 2, 12, "Actionable", bold=True, bg=C_ACT_BG, fg="000000")
+
+    ws.merge_cells("L4:N4")
+    _cell(ws, 4, 12, "Highly Actionable", bold=True, bg=C_HA_BG, fg=C_HA_FG)
+
+    # ── C) Case Type table (colonne G=7 – J=10) ───────────────────────────────
+    n_ct = _write_table(case_types[["label", "avg_aht", "volume", "target"]],
                         start_col=7,
                         headers=["case_type", "avg_aht", "volume", "target"])
 
-    # Sezione Primary Category (colonne P=16 – S=19)
+    # ── D) Primary Category table (colonne P=16 – S=19) ──────────────────────
     n_pc = 0
     if not primary_cats.empty:
-        n_pc = _write_table(ws, primary_cats[["label", "avg_aht", "volume", "target"]],
+        n_pc = _write_table(primary_cats[["label", "avg_aht", "volume", "target"]],
                             start_col=16,
                             headers=["primary_category", "avg_aht", "volume", "target"])
 
-    # Larghezze
-    for col, w in {"A": 35.14, "G": 32.0, "H": 9.43, "I": 7.71, "J": 9.0,
-                   "P": 27.0,  "Q": 7.86,  "R": 7.71, "S": 9.0}.items():
+    # ── E) Larghezze colonne ──────────────────────────────────────────────────
+    col_widths = {
+        "A": 35.14, "B": 9.43,  "C": 7.71,
+        "G": 32.0,  "H": 7.86,  "I": 7.71, "J": 6.29,
+        "K": 4.0,
+        "L": 13.14,
+        "O": 4.43,
+        "P": 27.0,  "Q": 7.86,  "R": 7.71, "S": 6.29,
+    }
+    for col, w in col_widths.items():
         ws.column_dimensions[col].width = w
 
-    # ── Grafico 1: Avg. AHT by Case Type (colonne F–O, sotto i dati) ─────────
+    # ── F) Altezze righe ──────────────────────────────────────────────────────
+    for r in (1, 2, 3, 4, 8, 10):
+        ws.row_dimensions[r].height = 15.75
+
+    # ── G) Grafico 1: Avg. AHT by Case Type ───────────────────────────────────
     bc1 = BarChart()
     bc1.type         = "bar"
     bc1.grouping     = "clustered"
@@ -140,17 +176,15 @@ def write_analysis_sheet(ws, case_types, primary_cats):
 
     bc1.add_data(Reference(ws, min_col=8, min_row=1, max_row=1 + n_ct),
                  titles_from_data=True)
-    bc1.add_data(Reference(ws, min_col=10, min_row=1, max_row=1 + n_ct),
-                 titles_from_data=True)
     bc1.set_categories(Reference(ws, min_col=7, min_row=2, max_row=1 + n_ct))
 
-    a1 = TwoCellAnchor()
-    a1._from = AnchorMarker(col=5,  colOff=438149, row=n_ct + 2, rowOff=133349)
-    a1.to    = AnchorMarker(col=14, colOff=180975, row=n_ct + 28, rowOff=66675)
+    a1        = TwoCellAnchor()
+    a1._from  = AnchorMarker(col=5,  colOff=438149, row=8,  rowOff=133349)
+    a1.to     = AnchorMarker(col=14, colOff=180975, row=34, rowOff=66675)
     bc1.anchor = a1
     ws.add_chart(bc1)
 
-    # ── Grafico 2: Avg. AHT by Primary Category (colonne O–X, sotto i dati) ──
+    # ── H) Grafico 2: Avg. AHT by Primary Category ────────────────────────────
     if not primary_cats.empty:
         bc2 = BarChart()
         bc2.type         = "bar"
@@ -162,15 +196,60 @@ def write_analysis_sheet(ws, case_types, primary_cats):
 
         bc2.add_data(Reference(ws, min_col=17, min_row=1, max_row=1 + n_pc),
                      titles_from_data=True)
-        bc2.add_data(Reference(ws, min_col=19, min_row=1, max_row=1 + n_pc),
-                     titles_from_data=True)
         bc2.set_categories(Reference(ws, min_col=16, min_row=2, max_row=1 + n_pc))
 
-        a2 = TwoCellAnchor()
-        a2._from = AnchorMarker(col=15, colOff=438149, row=n_pc + 2, rowOff=133349)
-        a2.to    = AnchorMarker(col=24, colOff=180975, row=n_pc + 28, rowOff=66675)
+        a2        = TwoCellAnchor()
+        a2._from  = AnchorMarker(col=15, colOff=19050,  row=10, rowOff=85725)
+        a2.to     = AnchorMarker(col=23, colOff=390525, row=36, rowOff=161925)
         bc2.anchor = a2
         ws.add_chart(bc2)
+
+
+# ── Scrittura foglio xLori & Costa (outlier AHT) ──────────────────────────────
+
+def write_xloricrosta_sheet(ws, df, aht_col, cas_col, typ_col, cat_col,
+                             ch_col, emp_col, num_col,
+                             target_phone, target_nonlive):
+    # Determina target per-riga in base al canale
+    if ch_col:
+        df = df.copy()
+        df["_target"] = df[ch_col].apply(
+            lambda ch: target_phone if ch == "Phone" else target_nonlive
+        )
+        outliers = df[df[aht_col] > df["_target"]].copy()
+    else:
+        outliers = df[df[aht_col] > target_phone].copy()
+
+    outliers = outliers.sort_values(aht_col, ascending=False)
+
+    # Costruisce le colonne da scrivere (solo quelle disponibili)
+    cols_wanted = []
+    if num_col:
+        cols_wanted.append((num_col, "case_number", 12.86))
+    cols_wanted.append((typ_col, "Case Type",             25.0))
+    if cat_col:
+        cols_wanted.append((cat_col, "Primary Category",  25.71))
+    if emp_col:
+        cols_wanted.append((emp_col, "Employee Name",     18.0))
+    if ch_col:
+        cols_wanted.append((ch_col,  "Case Origin (group)", 18.29))
+    cols_wanted.append((aht_col, "aht", 6.0))
+
+    # Intestazioni
+    hdr_font = Font(name="Calibri", size=11, bold=True)
+    for c_idx, (_, hdr, _) in enumerate(cols_wanted, 1):
+        cell = ws.cell(row=1, column=c_idx, value=hdr)
+        cell.font = hdr_font
+
+    # Dati
+    for r_idx, (_, row_data) in enumerate(outliers.iterrows(), 2):
+        for c_idx, (src_col, _, _) in enumerate(cols_wanted, 1):
+            val = row_data[src_col]
+            ws.cell(row=r_idx, column=c_idx, value=val)
+
+    # Larghezze
+    for c_idx, (_, _, w) in enumerate(cols_wanted, 1):
+        ws.column_dimensions[get_column_letter(c_idx)].width = w
 
 
 # ── Scrittura DATASET ─────────────────────────────────────────────────────────
@@ -212,15 +291,17 @@ def main():
                      decimal=",", low_memory=False)
 
     # Rileva colonne
-    aht_col  = detect_col(df, "Case AHT (mins)", "DS", "aht", "Case AHT")
-    cas_col  = detect_col(df, "Distinct Cases",  "DX", "cases", "Distinct Cases")
-    typ_col  = detect_col(df, "Case Type",       "Z",  "case_type")
-    cat_col  = detect_col(df, "Primary Category","BV", "primary_category")
-    ch_col   = detect_col(df, "Case Origin (group)", "U", "Case Channel", "S")
+    aht_col = detect_col(df, "Case AHT (mins)", "DS", "aht", "Case AHT")
+    cas_col = detect_col(df, "Distinct Cases",  "DX", "cases")
+    typ_col = detect_col(df, "Case Type",       "Z",  "case_type")
+    cat_col = detect_col(df, "Primary Category","BV", "primary_category")
+    ch_col  = detect_col(df, "Case Origin (group)", "U", "Case Channel", "S")
+    emp_col = detect_col(df, "Employee Name",   "EE", "Agent Name")
+    num_col = detect_col(df, "case_number",     "Case Number", "A")
 
-    missing = [n for n, c in [("Case AHT",     aht_col),
+    missing = [n for n, c in [("Case AHT",      aht_col),
                                ("Distinct Cases", cas_col),
-                               ("Case Type",    typ_col)] if not c]
+                               ("Case Type",     typ_col)] if not c]
     if missing:
         print(f"Errore: colonne obbligatorie non trovate: {missing}", file=sys.stderr)
         print(f"Colonne disponibili: {list(df.columns[:20])}...", file=sys.stderr)
@@ -230,7 +311,7 @@ def main():
     df[cas_col] = pd.to_numeric(df[cas_col], errors="coerce").fillna(0)
     df = df[df[cas_col] > 0].copy()
 
-    # Mappatura canale se necessaria
+    # Mappatura canale se la colonna è "Case Channel"
     if ch_col and ch_col == "Case Channel":
         def map_channel(ch):
             if ch in PHONE_CHANNELS:
@@ -246,10 +327,12 @@ def main():
     if args.channel and ch_col:
         df_analysis = df[df[ch_col] == args.channel]
 
+    channel_label = args.channel if args.channel else "(Tutto)"
+
     # Aggregazioni
     print("Calcolo aggregazioni...")
-    target = args.target_phone
-    case_types   = aggregate(df_analysis, aht_col, cas_col, typ_col, target, TOP_N_CASETYPE)
+    case_types   = aggregate(df_analysis, aht_col, cas_col, typ_col,
+                             args.target_phone, TOP_N_CASETYPE)
     primary_cats = (aggregate(df_analysis, aht_col, cas_col, cat_col,
                               args.target_nonlive, TOP_N_PRIMCAT)
                     if cat_col else pd.DataFrame())
@@ -264,7 +347,15 @@ def main():
 
     ws_analysis = wb.create_sheet("Case Type Analysis")
     print("Scrittura Case Type Analysis...")
-    write_analysis_sheet(ws_analysis, case_types, primary_cats)
+    write_analysis_sheet(ws_analysis, case_types, primary_cats, channel_label)
+
+    ws_outliers = wb.create_sheet("xLori & Costa(B.Info)")
+    print("Scrittura xLori & Costa(B.Info)...")
+    write_xloricrosta_sheet(
+        ws_outliers, df_analysis,
+        aht_col, cas_col, typ_col, cat_col, ch_col, emp_col, num_col,
+        args.target_phone, args.target_nonlive,
+    )
 
     # Rendi attivo Case Type Analysis
     wb.active = ws_analysis
@@ -281,6 +372,8 @@ def main():
     print(f"  Case Types (top {TOP_N_CASETYPE}):  {len(case_types)}")
     if not primary_cats.empty:
         print(f"  Primary Cat. (top {TOP_N_PRIMCAT}): {len(primary_cats)}")
+    outlier_count = len(df_analysis[df_analysis[aht_col] > args.target_phone])
+    print(f"  Outlier AHT cases:    {outlier_count}")
 
 
 if __name__ == "__main__":
