@@ -9,6 +9,9 @@ env/
 # Output generati
 output/
 
+# Database Dynamic Targets (generato automaticamente)
+data/dynamic_targets_history.json
+
 # OS
 .DS_Store
 Thumbs.db
