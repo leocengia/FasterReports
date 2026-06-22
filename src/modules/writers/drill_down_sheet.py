@@ -13,7 +13,7 @@ from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 CASE_TYPE_ABBREVS: dict[str, str] = {
     "Rates & Inventory Changes":           "R&I",
     "Booking Information":                 "B.Info",
-    "Room Type/Rate Plan":                 "RT/RP",
+    "Room Type/Rate Plan":                 "RT-RP",
     "Partner Central Access":              "PCA",
     "Content Update":                      "CU",
     "EVC":                                 "EVC",
@@ -38,6 +38,15 @@ _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _BLUE  = "4472C4"
 _LIGHT = "EBF3FB"
 
+# Caratteri vietati nei nomi dei fogli Excel: [ ] : * ? / \
+_INVALID_SHEET_CHARS = str.maketrans({c: "-" for c in r"[]:*?/\\"})
+
+
+def _safe_sheet_name(name: str) -> str:
+    """Rende un nome valido come titolo di foglio Excel (no caratteri vietati, max 31)."""
+    cleaned = name.translate(_INVALID_SHEET_CHARS).strip()
+    return cleaned[:31] or "Sheet"
+
 
 def _c(ws, row, col, value=None, *, bold=False, bg=None, align="center", fmt=None):
     cell = ws.cell(row=row, column=col, value=value)
@@ -55,10 +64,10 @@ def add_drill_down_sheet(xlsx_path: Path, df_full: pd.DataFrame,
                           case_type: str) -> str:
     """
     Apre il workbook esistente con openpyxl e aggiunge il foglio drill-down.
-    Ritorna il nome del foglio aggiunto.
+    Ritorna (nome_foglio, numero_righe).
     """
     abbrev     = CASE_TYPE_ABBREVS.get(case_type, case_type[:6])
-    sheet_name = f"xLori & Costa({abbrev})"
+    sheet_name = _safe_sheet_name(f"xLori & Costa({abbrev})")
 
     wb = openpyxl.load_workbook(xlsx_path)
 
@@ -114,4 +123,4 @@ def add_drill_down_sheet(xlsx_path: Path, df_full: pd.DataFrame,
     ws.row_dimensions[1].height = 16
 
     wb.save(xlsx_path)
-    return sheet_name
+    return sheet_name, len(sub)

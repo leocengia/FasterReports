@@ -34,18 +34,47 @@ CHANNEL_CONFIG = {
 DYN_TARGET_MIN_VOL = 3   # volume minimo per agente nel calcolo DynTarget
 DYN_TARGET_TOP_N   = 15  # top N agenti per AHT più basso
 
+# Colonne indispensabili per generare il report
+REQUIRED_COLUMNS = [
+    "Case AHT (mins)",
+    "Distinct Cases",
+    "Case Origin (group)",
+    "Case Type",
+    "Employee Name",
+]
+
+
+class DataError(Exception):
+    """Errore di input dati con messaggio leggibile per l'utente."""
+
 
 def load_csv(path: str | Path) -> pd.DataFrame:
-    """Carica il CSV raw e normalizza le colonne chiave."""
+    """Carica il CSV raw, valida le colonne richieste e normalizza i campi chiave."""
     df = pd.read_csv(
         Path(path),
         sep=";",
         encoding="utf-8-sig",
         decimal=",",
     )
+
+    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        raise DataError(
+            "Colonne mancanti nel CSV: "
+            + ", ".join(f"'{c}'" for c in missing)
+            + ".\n  Verifica che l'export non abbia rinominato le intestazioni "
+              "o cambiato separatore (atteso ';')."
+        )
+
     df["aht"]    = pd.to_numeric(df["Case AHT (mins)"], errors="coerce").fillna(0)
     df["cases"]  = pd.to_numeric(df["Distinct Cases"],  errors="coerce").fillna(0)
     df = df[df["cases"] > 0].copy()
+
+    if df.empty:
+        raise DataError(
+            "Nessuna riga valida nel CSV (dopo il filtro 'Distinct Cases' > 0).\n"
+            "  Il file potrebbe essere vuoto o contenere solo l'intestazione."
+        )
 
     # Normalizza canale: "Phone" → "Phone", "Other" → "Non-live"
     df["channel"] = df["Case Origin (group)"].map(CHANNEL_MAP).fillna("Non-live")

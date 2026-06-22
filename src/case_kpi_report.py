@@ -18,7 +18,7 @@ from pathlib import Path
 
 import xlsxwriter
 
-from modules.data_loader import load_csv
+from modules.data_loader import load_csv, DataError
 from modules.classification import build_tbl_class
 from modules.dynamic_targets import (
     compute_dyn_targets,
@@ -117,8 +117,12 @@ def cmd_generate(args) -> None:
 
     if args.drill_type:
         print(f"\nAggiunta drill-down per: {args.drill_type} ...")
-        sheet = add_drill_down_sheet(out_path, df, args.drill_type)
-        print(f"✓ Foglio aggiunto: {sheet}")
+        sheet, n = add_drill_down_sheet(out_path, df, args.drill_type)
+        if n == 0:
+            print(f"⚠ Attenzione: nessun caso trovato per '{args.drill_type}'. "
+                  f"Foglio '{sheet}' creato vuoto (controlla il nome del case type).")
+        else:
+            print(f"✓ Foglio aggiunto: {sheet} ({n} casi)")
 
 
 # ── Subcomando: drill ─────────────────────────────────────────────────────────
@@ -147,8 +151,12 @@ def cmd_drill(args) -> None:
 
     df = load_csv(csv_path)
     print(f"Aggiunta foglio drill-down '{case_type}' a {out_path} ...")
-    sheet = add_drill_down_sheet(out_path, df, case_type)
-    print(f"✓ Foglio aggiunto: {sheet}")
+    sheet, n = add_drill_down_sheet(out_path, df, case_type)
+    if n == 0:
+        print(f"⚠ Attenzione: nessun caso trovato per '{case_type}'. "
+              f"Foglio '{sheet}' creato vuoto (controlla il nome del case type).")
+    else:
+        print(f"✓ Foglio aggiunto: {sheet} ({n} casi)")
 
 
 # ── Utility ───────────────────────────────────────────────────────────────────
@@ -215,10 +223,14 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "generate":
-        cmd_generate(args)
-    elif args.command == "drill":
-        cmd_drill(args)
+    try:
+        if args.command == "generate":
+            cmd_generate(args)
+        elif args.command == "drill":
+            cmd_drill(args)
+    except DataError as e:
+        print(f"\nErrore nei dati: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
