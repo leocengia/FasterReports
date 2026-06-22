@@ -3,15 +3,19 @@ Foglio Progress Tracking: storico settimanale per case type tracciati.
 """
 
 import pandas as pd
-from ..dynamic_targets import get_progress_data
+from ..dynamic_targets import get_progress_data, get_tracked, CHANNELS
 from .styles import make_formats, C_YELLOW_LIGHT, C_BLUE_LIGHT, C_GREEN_LIGHT, C_RED_LIGHT
 
 
 def write_progress(wb, history: dict, week: int) -> None:
     """
-    Scrive il foglio Progress Tracking con:
-    - Tabella settimanale per ogni Channel × Case Type tracciato
+    Scrive il foglio Progress Tracking con, per ogni Channel × Case Type
+    SELEZIONATO (history[_config][tracked]):
+    - Tabella settimanale AHT vs DynTarget
     - Grafico linea AHT vs DynTarget
+
+    Lo storico contiene tutti i case type, ma qui mostriamo solo quelli scelti
+    dall'utente con --track, così il foglio resta leggibile.
     """
     ws   = wb.add_worksheet("Progress Tracking")
     fmts = make_formats(wb)
@@ -19,9 +23,19 @@ def write_progress(wb, history: dict, week: int) -> None:
     ws.merge_range(0, 0, 0, 9, "Progress Tracking — Dynamic Targets", fmts["header"])
     ws.set_row(0, 20)
 
+    g_col   = 11   # colonne dati sorgente grafici (fuori dalla tabella visibile)
     cur_row = 2
 
-    for channel in ("Phone", "Non-live"):
+    tracked = set(get_tracked(history))
+    if not tracked:
+        ws.merge_range(2, 0, 2, 9,
+                       "Nessun case type selezionato. Usa: generate ... "
+                       "--track \"Case Type 1\" \"Case Type 2\"",
+                       fmts["data_left"])
+        ws.set_column(0, 9, 16)
+        return
+
+    for channel in CHANNELS:
         ch_history = history.get(channel, {})
         if not ch_history:
             continue
@@ -32,7 +46,7 @@ def write_progress(wb, history: dict, week: int) -> None:
             "bg_color": bg, "align": "center", "valign": "vcenter", "border": 1,
         })
 
-        for ct, ct_data in sorted(ch_history.items()):
+        for ct in sorted(t for t in tracked if t in ch_history):
             weeks = get_progress_data(history, channel, ct)
             if not weeks:
                 continue
@@ -51,7 +65,6 @@ def write_progress(wb, history: dict, week: int) -> None:
             cur_row += 1
 
             # Dati + grafici ausiliari
-            g_col = 11
             ws.write(cur_row - 1, g_col, "_week",      fmts["data"])
             ws.write(cur_row - 1, g_col + 1, "_aht_min",  fmts["data"])
             ws.write(cur_row - 1, g_col + 2, "_dyn_min",  fmts["data"])
@@ -125,4 +138,4 @@ def write_progress(wb, history: dict, week: int) -> None:
     ws.set_column(0, 1, 10)
     ws.set_column(2, 8, 14)
     ws.set_column(10, 10, 3)
-    ws.set_column(g_col, g_col + 2, 12)
+    ws.set_column(g_col, g_col + 2, 12, None, {"hidden": True})

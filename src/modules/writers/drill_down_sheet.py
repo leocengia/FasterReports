@@ -27,7 +27,6 @@ CASE_TYPE_ABBREVS: dict[str, str] = {
     "Connectivity Questions":              "ConnQ",
     "Property Details":                    "PropDet",
     "Customer Review Removal":             "CRR",
-    "Partner Central Access":              "PCA",
     "Pre-Onboarding":                      "Pre-Onb",
     "Hotel Closure Outreach":              "HCO",
     "Live Site Investigation":             "LSI",

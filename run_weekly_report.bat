@@ -15,10 +15,23 @@ if not exist "%CSV%" (
     exit /b 1
 )
 
+:: ── Case type da tracciare nel foglio Progress (opzionale) ───────────────────
+echo.
+echo Case type da tracciare nel foglio Progress (storico WoW).
+echo Lasciare vuoto per mantenere la selezione gia' salvata.
+echo Separare piu' case type con il punto e virgola ';'
+echo   es: Partner Central Access;Rates ^& Inventory Changes
+set TRACK=
+set /p TRACK=Case type da tracciare:
+
 :: ── Generazione report ───────────────────────────────────────────────────────
 echo.
 echo Generazione report in corso...
-python src\case_kpi_report.py generate "%CSV%" --week %WEEK%
+if "%TRACK%"=="" (
+    python src\case_kpi_report.py generate "%CSV%" --week %WEEK%
+) else (
+    python src\case_kpi_report.py generate "%CSV%" --week %WEEK% --track "%TRACK%"
+)
 
 if errorlevel 1 (
     echo.

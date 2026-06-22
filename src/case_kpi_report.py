@@ -24,6 +24,7 @@ from modules.dynamic_targets import (
     compute_dyn_targets,
     compute_channel_summary,
     update_history,
+    get_tracked,
 )
 from modules.writers.dataset_sheet import write_dataset
 from modules.writers.wow_sheets import (
@@ -68,10 +69,22 @@ def cmd_generate(args) -> None:
     dyn_targets     = compute_dyn_targets(df)
     channel_summary = compute_channel_summary(df)
 
+    # --track accetta sia più argomenti separati ("A" "B") sia una singola
+    # stringa con ';' (comoda da batch): in entrambi i casi normalizziamo.
+    tracked = None
+    if args.track:
+        tracked = [
+            t.strip()
+            for item in args.track
+            for t in item.split(";")
+            if t.strip()
+        ]
+
     print(f"Aggiornamento storico: {history_p} ...")
     history = update_history(
         history_p, int(week), week_date,
         channel_summary, dyn_targets, min_vol=min_vol,
+        tracked=tracked,
     )
 
     out_dir  = Path("output")
@@ -88,11 +101,8 @@ def cmd_generate(args) -> None:
     write_dyntarget_channel(wb, df, dyn_targets, channel_summary, "Non-live")
     write_dyntarget_master(wb, dyn_targets, channel_summary, int(week), week_date)
 
-    has_history = any(
-        any(v.get("weeks") for v in ch.values())
-        for ch in history.values()
-    )
-    if has_history:
+    # Il foglio Progress viene scritto solo se l'utente ha selezionato dei case type
+    if get_tracked(history):
         write_progress(wb, history, week)
 
     write_wow_pivot(wb, df)
@@ -191,6 +201,9 @@ def main() -> None:
                      help="Volume minimo agente per DynTarget (default: 3)")
     gen.add_argument("--history",     default=str(DEFAULT_HISTORY),
                      help=f"Path file history JSON (default: {DEFAULT_HISTORY})")
+    gen.add_argument("--track",       nargs="*", default=None, metavar="CASE_TYPE",
+                     help="Case type da mostrare nel foglio Progress (si accumulano "
+                          "tra esecuzioni). Lo storico raccoglie comunque tutti i case type.")
     gen.add_argument("--drill-type",  default=None,
                      help="Aggiunge anche il foglio drill-down per questo case type")
 

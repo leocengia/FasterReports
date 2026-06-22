@@ -9,7 +9,7 @@ from .styles import make_formats, C_BLUE_HEADER, C_BLUE_LIGHT, C_YELLOW_LIGHT, C
 
 
 # Ordine fisso dei case type (dall'alfabetico del template)
-_ALL_CASE_TYPES = [
+_TEMPLATE_CASE_TYPES = [
     "Account Takeover", "Booking Information", "Booking Research (Rates)",
     "Bulk Update Request", "Connectivity Questions", "Contact Update",
     "Content Update", "Contract Update", "Customer Review Removal", "EVC",
@@ -22,6 +22,17 @@ _ALL_CASE_TYPES = [
     "Supplier Initiated Relocation", "Supplier Initiated Traveler Contact",
     "Traveler Outreach",
 ]
+
+
+def _case_type_order(df: pd.DataFrame) -> list[str]:
+    """
+    Ordine dei case type: prima quelli del template (ordine fisso), poi eventuali
+    case type presenti nei dati ma non nel template, in coda in ordine alfabetico.
+    Garantisce che nessun case type reale venga omesso dai fogli WoW.
+    """
+    present = set(df["Case Type"].dropna().unique())
+    extra = sorted(present - set(_TEMPLATE_CASE_TYPES))
+    return _TEMPLATE_CASE_TYPES + extra
 
 
 def write_wow_pivot(wb, df: pd.DataFrame) -> None:
@@ -93,6 +104,7 @@ def _write_monthly_table(ws, fmts, df: pd.DataFrame, start_row: int = 0):
         ("Non-live", "Non-live", 10, C_BLUE_LIGHT),
     ]
 
+    case_types = _case_type_order(df)
     row0 = start_row
     for label, channel, start_col, bg in sections:
         ws.merge_range(row0, start_col, row0, start_col + len(headers) - 1,
@@ -106,7 +118,7 @@ def _write_monthly_table(ws, fmts, df: pd.DataFrame, start_row: int = 0):
         total_min = float((sub["aht"] * sub["cases"]).sum()) if not sub.empty else 1.0
 
         row = row0 + 2
-        for ct in _ALL_CASE_TYPES:
+        for ct in case_types:
             grp = sub[sub["Case Type"] == ct]
             ws.write(row, start_col, ct, fmts["data_left"])
             if grp.empty:
@@ -223,7 +235,7 @@ def write_wow_export(wb, df: pd.DataFrame) -> None:
     phone_total = float((phone_sub["aht"] * phone_sub["cases"]).sum()) if not phone_sub.empty else 1.0
     nl_total    = float((nl_sub["aht"] * nl_sub["cases"]).sum())       if not nl_sub.empty   else 1.0
 
-    for r, ct in enumerate(_ALL_CASE_TYPES, start=2):
+    for r, ct in enumerate(_case_type_order(df), start=2):
         row_fmt = fmts["gray"] if r % 2 == 0 else fmts["data"]
         row_num = wb.add_format({
             "font_name": "Calibri", "font_size": 10, "border": 1,

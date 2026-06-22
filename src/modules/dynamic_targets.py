@@ -63,12 +63,23 @@ def compute_channel_summary(df: pd.DataFrame) -> dict:
     return summary
 
 
+# Chiave riservata nel dict history per la configurazione (non è un canale)
+CONFIG_KEY = "_config"
+CHANNELS   = ("Phone", "Non-live")
+
+
 def update_history(history_path: Path, week: int, week_date: str,
                    channel_summary: dict, dyn_targets: dict,
-                   min_vol: int = DYN_TARGET_MIN_VOL) -> dict:
+                   min_vol: int = DYN_TARGET_MIN_VOL,
+                   tracked: list[str] | None = None) -> dict:
     """
     Carica il file history (o crea vuoto), aggiunge la settimana corrente
     per ogni Channel × Case Type con DynTarget disponibile.
+
+    Lo storico accumula TUTTI i case type (così, quando se ne seleziona uno
+    per il tracking, la sua storia pregressa è già disponibile). La selezione
+    dei case type da mostrare nel foglio Progress è salvata in history[CONFIG_KEY].
+
     Salva e ritorna il dict aggiornato.
     """
     history_path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,6 +88,12 @@ def update_history(history_path: Path, week: int, week_date: str,
             history = json.load(f)
     else:
         history = {}
+
+    # Aggiorna l'elenco dei case type tracciati (se fornito)
+    if tracked is not None:
+        cfg = history.setdefault(CONFIG_KEY, {})
+        existing = set(cfg.get("tracked", []))
+        cfg["tracked"] = sorted(existing | set(tracked))
 
     for channel, ct_map in dyn_targets.items():
         if channel not in history:
@@ -107,6 +124,11 @@ def update_history(history_path: Path, week: int, week_date: str,
         json.dump(history, f, indent=2, ensure_ascii=False)
 
     return history
+
+
+def get_tracked(history: dict) -> list[str]:
+    """Ritorna l'elenco dei case type selezionati per il Progress Tracking."""
+    return history.get(CONFIG_KEY, {}).get("tracked", [])
 
 
 def get_progress_data(history: dict, channel: str, case_type: str) -> list[dict]:

@@ -1,15 +1,24 @@
 """
 Foglio Case Type Analysis: tre blocchi tabellari + grafici barre/linea.
+
+Layout:
+  - Blocco A (col 0-4):  Case Origin breakdown (tutti i case type, per canale)
+  - Blocco B (col 6-10): Case Type summary (solo Actionable/Highly Actionable)
+  - Blocco C (col 12-15): Primary Category summary
+  - Dati ausiliari grafici: colonne 20-23 (B) e 25-28 (C), fuori dalle tabelle
+  - Grafici combinati barre+linea inseriti sotto le tabelle, affiancati
 """
 
 import pandas as pd
 from ..classification import build_tbl_class, get_relevant_case_types
 from ..data_loader import CHANNEL_CONFIG, weighted_aht
 from .styles import (
-    make_formats, C_BLUE_HEADER, C_YELLOW_LIGHT, C_BLUE_LIGHT,
-    C_RED_LIGHT, C_GREEN_LIGHT, C_LINE_AHT, C_LINE_TARGET,
-    CLASSIFICATION_COLORS,
+    make_formats, C_YELLOW_LIGHT, C_BLUE_LIGHT, CLASSIFICATION_COLORS,
 )
+
+# Colonne riservate ai dati sorgente dei grafici (lontane dalle tabelle visibili)
+_CHART_DATA_COL_B = 20
+_CHART_DATA_COL_C = 25
 
 
 def write_case_type_analysis(wb, df: pd.DataFrame, week: str) -> None:
@@ -17,14 +26,18 @@ def write_case_type_analysis(wb, df: pd.DataFrame, week: str) -> None:
     fmts = make_formats(wb)
     tbl  = build_tbl_class(df)
 
-    # ── BLOCCO A (col 0-4): Case Origin (group) drill-down ───────────────────
-    _write_block_a(ws, fmts, wb, df)
+    end_a, chart_b, chart_c = None, None, None
 
-    # ── BLOCCO B (col 6-10): Case Type summary + grafico ─────────────────────
-    chart_b_row = _write_block_b(ws, fmts, wb, df, tbl, week, start_col=6)
+    end_a = _write_block_a(ws, fmts, wb, df)
+    end_b, chart_b = _write_block_b(ws, fmts, wb, df, tbl, week, start_col=6)
+    end_c, chart_c = _write_block_c(ws, fmts, wb, df, week, start_col=12)
 
-    # ── BLOCCO C (col 12-16): Primary Category summary + grafico ─────────────
-    _write_block_c(ws, fmts, wb, df, tbl, week, start_col=12, chart_anchor_row=chart_b_row)
+    # I grafici vengono inseriti sotto la tabella più lunga, affiancati
+    chart_row = max(end_a, end_b, end_c) + 2
+    if chart_b is not None:
+        ws.insert_chart(chart_row, 0, chart_b, {"x_offset": 0, "y_offset": 0})
+    if chart_c is not None:
+        ws.insert_chart(chart_row, 9, chart_c, {"x_offset": 0, "y_offset": 0})
 
     # ── Larghezze ─────────────────────────────────────────────────────────────
     ws.set_column(0,  0,  28)
@@ -34,13 +47,15 @@ def write_case_type_analysis(wb, df: pd.DataFrame, week: str) -> None:
     ws.set_column(7,  10, 10)
     ws.set_column(11, 11, 2)   # separatore
     ws.set_column(12, 12, 28)
-    ws.set_column(13, 16, 10)
+    ws.set_column(13, 15, 10)
+    # Nasconde le colonne dei dati sorgente dei grafici
+    ws.set_column(_CHART_DATA_COL_B, _CHART_DATA_COL_C + 4, None, None, {"hidden": True})
 
 
 # ── Blocco A ─────────────────────────────────────────────────────────────────
 
-def _write_block_a(ws, fmts, wb, df: pd.DataFrame) -> None:
-    """Case Origin (group) breakdown con subtotali per case type."""
+def _write_block_a(ws, fmts, wb, df: pd.DataFrame) -> int:
+    """Case Origin (group) breakdown con subtotali per case type. Ritorna l'ultima riga usata."""
     ws.merge_range(0, 0, 0, 4, "Case Origin Breakdown", fmts["header"])
     headers = ["Case Type", "avg AHT", "volume", "# above target", "% OOT"]
     for i, h in enumerate(headers):
@@ -90,12 +105,17 @@ def _write_block_a(ws, fmts, wb, df: pd.DataFrame) -> None:
         ws.write_number(row, 4, tot_oot,   total_fmt)
         row += 2
 
+    return row
+
 
 # ── Blocco B ─────────────────────────────────────────────────────────────────
 
 def _write_block_b(ws, fmts, wb, df: pd.DataFrame, tbl: pd.DataFrame,
-                   week: str, start_col: int) -> int:
-    """Case Type summary per canale + grafico combo barre/linea."""
+                   week: str, start_col: int):
+    """
+    Case Type summary per canale (solo Actionable/Highly Actionable).
+    Ritorna (ultima_riga, chart) — il chart va inserito dal chiamante.
+    """
     headers = ["Case Type", "avg AHT", "volume", "target", "class."]
     ws.merge_range(0, start_col, 0, start_col + len(headers) - 1,
                    f"Case Type Summary – W{week}", fmts["header"])
@@ -103,15 +123,15 @@ def _write_block_b(ws, fmts, wb, df: pd.DataFrame, tbl: pd.DataFrame,
         ws.write(1, start_col + i, h, fmts["header"])
 
     row = 2
-    chart_data_rows: list[tuple] = []   # (ct, aht, vol, target, cls) per il grafico
+    chart_rows: list[tuple] = []   # (ct, aht, vol, target)
 
     for channel_key, label, bg in [
         ("Phone",    "[ Phone ]",    C_YELLOW_LIGHT),
         ("Non-live", "[ Non-live ]", C_BLUE_LIGHT),
     ]:
-        sub  = df[df["channel"] == channel_key]
-        cfg  = CHANNEL_CONFIG[channel_key]
-        target = cfg["target_aht"]
+        sub      = df[df["channel"] == channel_key]
+        cfg      = CHANNEL_CONFIG[channel_key]
+        target   = cfg["target_aht"]
         relevant = get_relevant_case_types(tbl, channel_key)
 
         title_fmt = wb.add_format({
@@ -128,155 +148,130 @@ def _write_block_b(ws, fmts, wb, df: pd.DataFrame, tbl: pd.DataFrame,
             cls   = _get_class(tbl, channel_key, ct)
             cf    = _cls_fmt(wb, cls)
             cfn   = _cls_fmt(wb, cls, num=True)
-            ws.write(row, start_col,     ct,      cf)
+            ws.write(row, start_col,     ct,     cf)
             ws.write_number(row, start_col + 1, aht_v,  cfn)
             ws.write_number(row, start_col + 2, vol,    cf)
             ws.write_number(row, start_col + 3, target, cfn)
             ws.write(row, start_col + 4, cls,    cf)
-            chart_data_rows.append((row, ct, aht_v, vol, target, cls))
+            chart_rows.append((f"{ct} [{channel_key[0]}]", aht_v, vol, target))
             row += 1
         row += 1
 
-    # ── Grafico combinato barre+linea ──────────────────────────────────────────
-    chart_start_row = row + 1
-    if chart_data_rows:
-        # Scrivi dati grafico in una zona nascosta
-        g_col = start_col + 7
-        ws.write(0, g_col, "_ct",  fmts["data"])
-        ws.write(0, g_col + 1, "_aht", fmts["data"])
-        ws.write(0, g_col + 2, "_vol", fmts["data"])
-        ws.write(0, g_col + 3, "_tgt", fmts["data"])
-        for i, (xl_row, ct, aht_v, vol, tgt, _) in enumerate(chart_data_rows, start=1):
-            ws.write(i, g_col,     ct,    fmts["data"])
-            ws.write_number(i, g_col + 1, aht_v, fmts["data_num"])
-            ws.write_number(i, g_col + 2, vol,   fmts["data_int"])
-            ws.write_number(i, g_col + 3, tgt,   fmts["data_num"])
-
-        n = len(chart_data_rows)
-        sname = ws.get_name()
-
-        bar_chart  = wb.add_chart({"type": "column"})
-        line_chart = wb.add_chart({"type": "line"})
-        tgt_chart  = wb.add_chart({"type": "line"})
-
-        bar_chart.add_series({
-            "name":       "Volume",
-            "categories": [sname, 1, g_col,     n, g_col],
-            "values":     [sname, 1, g_col + 2, n, g_col + 2],
-            "fill":       {"color": "#4472C4"},
-            "y2_axis":    True,
-        })
-        line_chart.add_series({
-            "name":       "AHT (min)",
-            "categories": [sname, 1, g_col,     n, g_col],
-            "values":     [sname, 1, g_col + 1, n, g_col + 1],
-            "line":       {"color": "#C00000", "width": 2},
-            "marker":     {"type": "circle", "size": 5, "fill": {"color": "#C00000"}},
-        })
-        tgt_chart.add_series({
-            "name":       "Target AHT",
-            "categories": [sname, 1, g_col,     n, g_col],
-            "values":     [sname, 1, g_col + 3, n, g_col + 3],
-            "line":       {"color": "#70AD47", "width": 1.5, "dash_type": "dash"},
-        })
-
-        bar_chart.combine(line_chart)
-        bar_chart.combine(tgt_chart)
-        bar_chart.set_title({"name": f"Case Type AHT vs Target – W{week}"})
-        bar_chart.set_x_axis({"name": "Case Type"})
-        bar_chart.set_y_axis({"name": "AHT (min)"})
-        bar_chart.set_y2_axis({"name": "Volume"})
-        bar_chart.set_size({"width": 480, "height": 300})
-        ws.insert_chart(chart_start_row, start_col, bar_chart, {"x_offset": 0, "y_offset": 0})
-
-    return chart_start_row
+    chart = _build_combo_chart(
+        ws, fmts, wb, chart_rows, _CHART_DATA_COL_B,
+        title=f"Case Type AHT vs Target – W{week}",
+        bar_name="Volume", line_name="AHT (min)",
+    )
+    return row, chart
 
 
 # ── Blocco C ─────────────────────────────────────────────────────────────────
 
-def _write_block_c(ws, fmts, wb, df: pd.DataFrame, tbl: pd.DataFrame,
-                   week: str, start_col: int, chart_anchor_row: int) -> None:
-    """Primary Category summary + grafico."""
+def _write_block_c(ws, fmts, wb, df: pd.DataFrame, week: str, start_col: int):
+    """Primary Category summary. Ritorna (ultima_riga, chart)."""
     headers = ["Primary Category", "avg AHT", "volume", "target"]
     ws.merge_range(0, start_col, 0, start_col + len(headers) - 1,
                    f"Primary Category – W{week}", fmts["header"])
     for i, h in enumerate(headers):
         ws.write(1, start_col + i, h, fmts["header"])
 
+    if "Primary Category" not in df.columns:
+        return 2, None
+
     cfg_ph = CHANNEL_CONFIG["Phone"]
     cfg_nl = CHANNEL_CONFIG["Non-live"]
-    # Usa target blended (media semplicistica)
     target_blended = (cfg_ph["target_aht"] + cfg_nl["target_aht"]) / 2
-
-    row = 2
-    if "Primary Category" not in df.columns:
-        return
 
     cat_agg = (
         df.groupby("Primary Category")
         .apply(lambda g: pd.Series({
-            "vol":    int(g["cases"].sum()),
-            "aht":    weighted_aht(g),
+            "vol": int(g["cases"].sum()),
+            "aht": weighted_aht(g),
         }), include_groups=False)
         .reset_index()
         .sort_values("vol", ascending=False)
     )
 
-    g_col = start_col + 6
-    ws.write(0, g_col, "_pc", fmts["data"])
-    ws.write(0, g_col + 1, "_aht", fmts["data"])
-    ws.write(0, g_col + 2, "_vol", fmts["data"])
-    ws.write(0, g_col + 3, "_tgt", fmts["data"])
-
-    for i, (_, cat_row) in enumerate(cat_agg.iterrows(), start=1):
+    row = 2
+    chart_rows: list[tuple] = []
+    for _, cat_row in cat_agg.iterrows():
         ws.write(row, start_col, cat_row["Primary Category"], fmts["data_left"])
         ws.write_number(row, start_col + 1, cat_row["aht"], fmts["data_num"])
         ws.write_number(row, start_col + 2, cat_row["vol"], fmts["data_int"])
         ws.write_number(row, start_col + 3, target_blended, fmts["data_num"])
-        ws.write(i, g_col,     cat_row["Primary Category"], fmts["data"])
-        ws.write_number(i, g_col + 1, cat_row["aht"],   fmts["data_num"])
-        ws.write_number(i, g_col + 2, cat_row["vol"],   fmts["data_int"])
-        ws.write_number(i, g_col + 3, target_blended,   fmts["data_num"])
+        chart_rows.append((cat_row["Primary Category"], cat_row["aht"],
+                           int(cat_row["vol"]), target_blended))
         row += 1
 
-    n = len(cat_agg)
-    if n < 2:
-        return
+    chart = _build_combo_chart(
+        ws, fmts, wb, chart_rows, _CHART_DATA_COL_C,
+        title=f"Primary Category AHT – W{week}",
+        bar_name="Volume", line_name="AHT (min)",
+    )
+    return row, chart
+
+
+# ── Costruzione grafico combinato (barre + 2 linee con UN solo combine) ───────
+
+def _build_combo_chart(ws, fmts, wb, chart_rows: list[tuple], data_col: int,
+                       title: str, bar_name: str, line_name: str):
+    """
+    Scrive i dati sorgente in colonne nascoste (data_col..data_col+3) e
+    costruisce un grafico combinato:
+      - barre = volume (asse secondario)
+      - linea piena = AHT corrente (asse primario)
+      - linea tratteggiata = target (asse primario)
+    Entrambe le linee stanno in UN solo line chart, così basta un solo combine().
+    """
+    if len(chart_rows) < 2:
+        return None
+
+    # Intestazioni dati sorgente
+    ws.write(0, data_col,     "_cat", fmts["data"])
+    ws.write(0, data_col + 1, "_aht", fmts["data"])
+    ws.write(0, data_col + 2, "_vol", fmts["data"])
+    ws.write(0, data_col + 3, "_tgt", fmts["data"])
+    for i, (cat, aht_v, vol, tgt) in enumerate(chart_rows, start=1):
+        ws.write(i, data_col,     str(cat), fmts["data"])
+        ws.write_number(i, data_col + 1, aht_v, fmts["data_num"])
+        ws.write_number(i, data_col + 2, vol,   fmts["data_int"])
+        ws.write_number(i, data_col + 3, tgt,   fmts["data_num"])
+
+    n     = len(chart_rows)
     sname = ws.get_name()
 
-    bar_c  = wb.add_chart({"type": "column"})
-    line_c = wb.add_chart({"type": "line"})
-    tgt_c  = wb.add_chart({"type": "line"})
+    bar_chart  = wb.add_chart({"type": "column"})
+    line_chart = wb.add_chart({"type": "line"})
 
-    bar_c.add_series({
-        "name":       "Volume",
-        "categories": [sname, 1, g_col,     n, g_col],
-        "values":     [sname, 1, g_col + 2, n, g_col + 2],
+    bar_chart.add_series({
+        "name":       bar_name,
+        "categories": [sname, 1, data_col,     n, data_col],
+        "values":     [sname, 1, data_col + 2, n, data_col + 2],
         "fill":       {"color": "#4472C4"},
         "y2_axis":    True,
     })
-    line_c.add_series({
-        "name":       "AHT (min)",
-        "categories": [sname, 1, g_col,     n, g_col],
-        "values":     [sname, 1, g_col + 1, n, g_col + 1],
-        "line":       {"color": "#C00000", "width": 2},
+    line_chart.add_series({
+        "name":       line_name,
+        "categories": [sname, 1, data_col,     n, data_col],
+        "values":     [sname, 1, data_col + 1, n, data_col + 1],
+        "line":       {"color": "#C00000", "width": 2.25},
         "marker":     {"type": "circle", "size": 5, "fill": {"color": "#C00000"}},
     })
-    tgt_c.add_series({
+    line_chart.add_series({
         "name":       "Target AHT",
-        "categories": [sname, 1, g_col,     n, g_col],
-        "values":     [sname, 1, g_col + 3, n, g_col + 3],
-        "line":       {"color": "#70AD47", "width": 1.5, "dash_type": "dash"},
+        "categories": [sname, 1, data_col,     n, data_col],
+        "values":     [sname, 1, data_col + 3, n, data_col + 3],
+        "line":       {"color": "#70AD47", "width": 1.75, "dash_type": "dash"},
     })
 
-    bar_c.combine(line_c)
-    bar_c.combine(tgt_c)
-    bar_c.set_title({"name": f"Primary Category AHT – W{week}"})
-    bar_c.set_x_axis({"name": "Category"})
-    bar_c.set_y_axis({"name": "AHT (min)"})
-    bar_c.set_y2_axis({"name": "Volume"})
-    bar_c.set_size({"width": 480, "height": 300})
-    ws.insert_chart(chart_anchor_row, start_col, bar_c, {"x_offset": 0, "y_offset": 0})
+    bar_chart.combine(line_chart)
+    bar_chart.set_title({"name": title})
+    bar_chart.set_x_axis({"name": "Categoria", "num_font": {"rotation": -45}})
+    bar_chart.set_y_axis({"name": "AHT (min)"})
+    bar_chart.set_y2_axis({"name": "Volume"})
+    bar_chart.set_legend({"position": "bottom"})
+    bar_chart.set_size({"width": 560, "height": 340})
+    return bar_chart
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
