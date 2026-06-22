@@ -1,25 +1,31 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0.."
 title FasterReports - Case KPI Report
 
 echo ============================================================
 echo   FasterReports ^| Case KPI Report
 echo ============================================================
 echo.
+echo   Cartella raw data: %cd%\raw_data
+echo.
+echo   File disponibili:
+for %%f in ("raw_data\*.csv") do echo     - %%~nxf
+echo.
 echo   Input atteso: export completo casi (CSV separato da ;)
-echo   Colonne necessarie: Case Type, Case AHT (mins),
-echo                       Distinct Cases, Distinct Cases
-echo   Colonne opzionali:  Primary Category,
-echo                       Case Origin (group) o Case Channel
+echo   Colonne necessarie: Case Type, Case AHT (mins), Distinct Cases
+echo   Colonne opzionali:  Primary Category, Case Origin (group)
 echo.
 echo ------------------------------------------------------------
 echo.
 
-set /p INPUT_FILE=  Percorso file CSV raw:
+set /p FILENAME=  Nome file CSV (es. cases_W24.csv):
 
-if not exist "%INPUT_FILE%" (
+set INPUT_FILE=raw_data\!FILENAME!
+
+if not exist "!INPUT_FILE!" (
     echo.
-    echo   ERRORE: file non trovato - "%INPUT_FILE%"
+    echo   ERRORE: file non trovato - "!INPUT_FILE!"
     echo.
     pause
     exit /b 1
@@ -43,9 +49,9 @@ echo   Generazione report in corso...
 echo.
 
 if "!CHANNEL!"=="" (
-    python src\case_KPI_report.py "%INPUT_FILE%" --week %WEEK% --target-phone %TARGET_PHONE% --target-nonlive %TARGET_NL%
+    python src\case_KPI_report.py "!INPUT_FILE!" --week !WEEK! --target-phone !TARGET_PHONE! --target-nonlive !TARGET_NL!
 ) else (
-    python src\case_KPI_report.py "%INPUT_FILE%" --week %WEEK% --target-phone %TARGET_PHONE% --target-nonlive %TARGET_NL% --channel "!CHANNEL!"
+    python src\case_KPI_report.py "!INPUT_FILE!" --week !WEEK! --target-phone !TARGET_PHONE! --target-nonlive !TARGET_NL! --channel "!CHANNEL!"
 )
 
 if %ERRORLEVEL% NEQ 0 (
@@ -53,7 +59,7 @@ if %ERRORLEVEL% NEQ 0 (
     echo   ERRORE durante la generazione. Controlla i messaggi sopra.
 ) else (
     echo.
-    echo   Report salvato in: output\case_KPI_report_W%WEEK%.xlsx
+    echo   Report salvato in: output\case_KPI_report_W!WEEK!.xlsx
 )
 
 echo.

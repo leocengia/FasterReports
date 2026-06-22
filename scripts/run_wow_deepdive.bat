@@ -1,26 +1,32 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0.."
 title FasterReports - WoW Case Type Deep Dive
 
 echo ============================================================
 echo   FasterReports ^| WoW Case Type Deep Dive
 echo ============================================================
 echo.
+echo   Cartella raw data: %cd%\raw_data
+echo.
+echo   File disponibili:
+for %%f in ("raw_data\*.csv") do echo     - %%~nxf
+echo.
 echo   Input atteso: export completo casi (CSV separato da ;)
 echo   Colonne necessarie: Case Type, Case AHT (mins),
 echo                       Distinct Cases, Case Origin (group)
-echo   Colonne opzionali:  MonthKey (es. 2026-06-01),
-echo                       OOT_flag (0/1, derivato automaticamente
-echo                       se assente)
+echo   Colonne opzionali:  MonthKey, OOT_flag
 echo.
 echo ------------------------------------------------------------
 echo.
 
-set /p INPUT_FILE=  Percorso file CSV raw:
+set /p FILENAME=  Nome file CSV (es. cases_export.csv):
 
-if not exist "%INPUT_FILE%" (
+set INPUT_FILE=raw_data\!FILENAME!
+
+if not exist "!INPUT_FILE!" (
     echo.
-    echo   ERRORE: file non trovato - "%INPUT_FILE%"
+    echo   ERRORE: file non trovato - "!INPUT_FILE!"
     echo.
     pause
     exit /b 1
@@ -46,9 +52,9 @@ echo   Generazione report in corso...
 echo.
 
 if "!MONTH!"=="" (
-    python src\wow_casetype_deepdive.py "%INPUT_FILE%" --target-phone %TARGET_PHONE% --target-nonlive %TARGET_NL% --min-volume %MIN_VOL%
+    python src\wow_casetype_deepdive.py "!INPUT_FILE!" --target-phone !TARGET_PHONE! --target-nonlive !TARGET_NL! --min-volume !MIN_VOL!
 ) else (
-    python src\wow_casetype_deepdive.py "%INPUT_FILE%" --month "!MONTH!" --target-phone %TARGET_PHONE% --target-nonlive %TARGET_NL% --min-volume %MIN_VOL%
+    python src\wow_casetype_deepdive.py "!INPUT_FILE!" --month "!MONTH!" --target-phone !TARGET_PHONE! --target-nonlive !TARGET_NL! --min-volume !MIN_VOL!
 )
 
 if %ERRORLEVEL% NEQ 0 (
