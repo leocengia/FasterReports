@@ -1,5 +1,17 @@
 @echo off
 chcp 65001 > nul
+cd /d "%~dp0"
+
+:: ── Verifica venv ─────────────────────────────────────────────────────────────
+if not exist ".venv\Scripts\python.exe" (
+    echo ERRORE: ambiente virtuale non configurato.
+    echo Lancia prima setup.bat per installare le dipendenze.
+    echo.
+    pause
+    exit /b 1
+)
+set PY=.venv\Scripts\python.exe
+
 echo ============================================================
 echo   KPI Report Generator
 echo ============================================================
@@ -28,9 +40,9 @@ set /p TRACK=Case type da tracciare:
 echo.
 echo Generazione report in corso...
 if "%TRACK%"=="" (
-    python src\case_kpi_report.py generate "%CSV%" --week %WEEK%
+    "%PY%" src\case_kpi_report.py generate "%CSV%" --week %WEEK%
 ) else (
-    python src\case_kpi_report.py generate "%CSV%" --week %WEEK% --track "%TRACK%"
+    "%PY%" src\case_kpi_report.py generate "%CSV%" --week %WEEK% --track "%TRACK%"
 )
 
 if errorlevel 1 (
@@ -60,7 +72,7 @@ if /i "%ADD_DRILL%"=="s" (
     echo.
     set /p DRILL_TYPE=Case type per drill-down:
     echo.
-    python src\case_kpi_report.py drill ^
+    "%PY%" src\case_kpi_report.py drill ^
         --output "output\case_KPI_report_W%WEEK%.xlsx" ^
         --input "%CSV%" ^
         --type "%DRILL_TYPE%"
