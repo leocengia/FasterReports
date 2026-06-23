@@ -55,6 +55,7 @@ def load_csv(path: str | Path) -> pd.DataFrame:
         sep=";",
         encoding="utf-8-sig",
         decimal=",",
+        low_memory=False,
     )
 
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]

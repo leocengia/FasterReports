@@ -164,7 +164,7 @@ def cmd_drill(args) -> None:
 def _load_raw(csv_path: Path):
     """Carica il CSV senza normalizzazione (per DATASET sheet)."""
     import pandas as pd
-    return pd.read_csv(csv_path, sep=";", encoding="utf-8-sig", decimal=",")
+    return pd.read_csv(csv_path, sep=";", encoding="utf-8-sig", decimal=",", low_memory=False)
 
 
 def _week_date(provided: str | None) -> str:
