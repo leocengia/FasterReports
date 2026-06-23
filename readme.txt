@@ -12,6 +12,10 @@ output/             Report Excel generati (escluso da git)
 
 Setup
 -----
+Opzione A — doppio click (consigliata):
+  setup.bat        crea il venv e installa tutte le dipendenze automaticamente
+
+Opzione B — manuale:
 1. python -m venv .venv
 2. .venv\Scripts\activate
 3. pip install -r requirements.txt
