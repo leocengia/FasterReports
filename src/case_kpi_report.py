@@ -38,9 +38,18 @@ from modules.writers.dyntarget_channel_sheet import write_dyntarget_channel
 from modules.writers.dyntarget_master_sheet import write_dyntarget_master
 from modules.writers.progress_sheet import write_progress
 from modules.writers.drill_down_sheet import add_drill_down_sheet
+from modules.writers.pivot_charts_com import add_pivot_and_charts
+
+
+CRTX_CASETYPE = Path("reports_templates/charts/avgAHT_Volume_PrimaryCategory_CC.crtx")
 
 
 DEFAULT_HISTORY = Path("data/dynamic_targets_history.json")
+
+
+def _float_arg(s: str) -> float:
+    """Parsa un float accettando anche la virgola decimale (es. '19,98')."""
+    return float(str(s).strip().replace(",", "."))
 
 
 # ── Subcomando: generate ──────────────────────────────────────────────────────
@@ -55,6 +64,8 @@ def cmd_generate(args) -> None:
     week_date = _week_date(args.week_date)
     min_vol   = args.min_vol
     history_p = Path(args.history)
+    target_phone    = args.target_phone
+    target_nonlive  = args.target_nonlive
 
     print(f"Caricamento dati: {csv_path} ...")
     df     = load_csv(csv_path)
@@ -96,7 +107,7 @@ def cmd_generate(args) -> None:
 
     # Ordine dei fogli
     write_dataset(wb, df_raw)
-    write_case_type_analysis(wb, df, week)
+    cta_layout = write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive)
     write_dyntarget_channel(wb, df, dyn_targets, channel_summary, "Phone")
     write_dyntarget_channel(wb, df, dyn_targets, channel_summary, "Non-live")
     write_dyntarget_master(wb, dyn_targets, channel_summary, int(week), week_date)
@@ -123,6 +134,11 @@ def cmd_generate(args) -> None:
                   f"Foglio '{sheet}' creato vuoto (controlla il nome del case type).")
         else:
             print(f"✓ Foglio aggiunto: {sheet} ({n} casi)")
+
+    # Post-process COM: pivot interattiva + grafici .crtx sul foglio Case Type Analysis.
+    # Deve essere l'ultimo writer: openpyxl (drill-down) non preserva pivot/grafici.
+    print("\nAggiunta pivot e grafici (Excel COM) al foglio Case Type Analysis ...")
+    add_pivot_and_charts(out_path, CRTX_CASETYPE, cta_layout)
 
 
 # ── Subcomando: drill ─────────────────────────────────────────────────────────
@@ -207,6 +223,10 @@ def main() -> None:
                      help="Data inizio settimana ISO (es. 2026-06-16), default: lunedì scorso")
     gen.add_argument("--min-vol",     type=int, default=3,
                      help="Volume minimo agente per DynTarget (default: 3)")
+    gen.add_argument("--target-phone",   type=_float_arg, default=19.98,
+                     help="Target AHT Phone in minuti (default: 19.98)")
+    gen.add_argument("--target-nonlive", type=_float_arg, default=18.96,
+                     help="Target AHT Non-live in minuti (default: 18.96)")
     gen.add_argument("--history",     default=str(DEFAULT_HISTORY),
                      help=f"Path file history JSON (default: {DEFAULT_HISTORY})")
     gen.add_argument("--track",       nargs="*", default=None, metavar="CASE_TYPE",

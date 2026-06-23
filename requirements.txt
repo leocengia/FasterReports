@@ -1,3 +1,4 @@
 pandas>=2.2.0
 openpyxl>=3.1.0
 xlsxwriter>=3.2.0
+pywin32>=306   # automazione COM Excel (pivot interattive + grafici da .crtx)

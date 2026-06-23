@@ -119,6 +119,37 @@ def agg_by_case_type(df: pd.DataFrame, channel: str | None = None) -> pd.DataFra
     return result.reset_index(drop=True)
 
 
+def agg_simple(df: pd.DataFrame, by_col: str, count_col: str = "case_number") -> pd.DataFrame:
+    """
+    Aggrega per `by_col` con la stessa logica di una pivot Excel:
+      - avg_aht = media SEMPLICE di "Case AHT (mins)" (non pesata)
+      - volume  = CONTEGGIO di `count_col` (case_number) — righe non vuote del gruppo
+
+    Va calcolata sulla stessa popolazione della pivot (tipicamente df_raw), così
+    le tabelle G-J del foglio Case Type Analysis coincidono con la pivot.
+
+    Ritorna un DataFrame [by_col, avg_aht, volume] ordinato per volume desc.
+    Se `count_col` è assente, volume = numero di righe del gruppo.
+    """
+    aht = pd.to_numeric(df["Case AHT (mins)"], errors="coerce")
+    tmp = pd.DataFrame({by_col: df[by_col], "_aht": aht})
+
+    if count_col in df.columns:
+        tmp["_cnt"] = df[count_col].values
+        agg_spec = {"avg_aht": ("_aht", "mean"), "volume": ("_cnt", "count")}
+    else:
+        agg_spec = {"avg_aht": ("_aht", "mean"), "volume": ("_aht", "size")}
+
+    out = (
+        tmp.groupby(by_col, dropna=True)
+        .agg(**agg_spec)
+        .reset_index()
+    )
+    out["avg_aht"] = out["avg_aht"].fillna(0.0)
+    out["volume"]  = out["volume"].astype(int)
+    return out.sort_values("volume", ascending=False).reset_index(drop=True)
+
+
 def agg_by_agent_casetype(df: pd.DataFrame, channel: str | None = None) -> pd.DataFrame:
     """
     Aggrega per (Employee Name, Case Type) per il calcolo dei DynTarget.

@@ -27,6 +27,16 @@ if not exist "%CSV%" (
     exit /b 1
 )
 
+:: ── Target AHT (Phone e Non-live) ────────────────────────────────────────────
+echo.
+echo Target AHT in minuti (Invio per i default 19.98 / 18.96).
+set TARGET_PHONE=
+set /p TARGET_PHONE=Target AHT Phone (es. 19.98):
+if "%TARGET_PHONE%"=="" set TARGET_PHONE=19.98
+set TARGET_NL=
+set /p TARGET_NL=Target AHT Non-live (es. 18.96):
+if "%TARGET_NL%"=="" set TARGET_NL=18.96
+
 :: ── Case type da tracciare nel foglio Progress (opzionale) ───────────────────
 echo.
 echo Case type da tracciare nel foglio Progress (storico WoW).
@@ -40,9 +50,9 @@ set /p TRACK=Case type da tracciare:
 echo.
 echo Generazione report in corso...
 if "%TRACK%"=="" (
-    "%PY%" src\case_kpi_report.py generate "%CSV%" --week %WEEK%
+    "%PY%" src\case_kpi_report.py generate "%CSV%" --week %WEEK% --target-phone %TARGET_PHONE% --target-nonlive %TARGET_NL%
 ) else (
-    "%PY%" src\case_kpi_report.py generate "%CSV%" --week %WEEK% --track "%TRACK%"
+    "%PY%" src\case_kpi_report.py generate "%CSV%" --week %WEEK% --track "%TRACK%" --target-phone %TARGET_PHONE% --target-nonlive %TARGET_NL%
 )
 
 if errorlevel 1 (
