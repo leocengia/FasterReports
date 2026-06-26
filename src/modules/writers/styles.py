@@ -13,6 +13,22 @@ C_RED          = "#C00000"   # rosso scuro (Highly Actionable)
 C_GRAY_LIGHT   = "#F2F2F2"   # grigio molto chiaro (zebra)
 C_WHITE        = "#FFFFFF"
 
+# ── Palette tema "EG CC" (Expedia Group) ─────────────────────────────────────
+C_EG_BLUE      = "#000099"   # accent1
+C_EG_ORANGE    = "#F58025"   # accent2
+C_EG_CYAN      = "#00B1FF"   # accent3
+C_EG_GRAY      = "#939598"   # accent4
+C_EG_YELLOW    = "#FFC60B"   # accent5
+C_EG_RED       = "#CB2C30"   # accent6
+C_EG_BLUE_LT   = "#D6D6F2"   # accent1 chiaro (header sezioni)
+
+# Colori categoria per i grafici del deepdive
+CHART_CATEGORY_COLORS = {
+    "Highly Actionable": C_EG_RED,
+    "Actionable":        C_EG_YELLOW,
+    "Process Driven":    C_EG_GRAY,
+}
+
 # Colori barra DynTarget chart
 C_BAR_ABOVE    = "#C00000"   # AHT sopra target → rosso
 C_BAR_BELOW    = "#70AD47"   # AHT sotto target → verde

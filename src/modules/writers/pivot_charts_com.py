@@ -24,7 +24,7 @@ _xlCount      = -4112
 _xlCompactRow = 0
 
 
-def add_pivot_and_charts(out_path, crtx_path, layout: dict) -> None:
+def add_pivot_and_charts(out_path, crtx_path, layout: dict, theme_path=None) -> None:
     """Aggiunge pivot + grafici a out_path via Excel COM. No-op se pywin32/Excel mancano."""
     try:
         import win32com.client as win32
@@ -48,6 +48,18 @@ def add_pivot_and_charts(out_path, crtx_path, layout: dict) -> None:
         excel.DisplayAlerts = False
 
         wb  = excel.Workbooks.Open(out_abs)
+
+        # Applica il tema colori (EG CC) all'intero workbook, se fornito.
+        if theme_path:
+            theme_abs = os.path.abspath(str(theme_path))
+            if os.path.exists(theme_abs):
+                try:
+                    wb.ApplyTheme(theme_abs)
+                except Exception as e:
+                    print(f"⚠ Tema non applicato: {e}")
+            else:
+                print(f"⚠ Tema non trovato: {theme_abs}")
+
         cta = wb.Sheets("Case Type Analysis")
         ds  = wb.Sheets("DATASET")
 

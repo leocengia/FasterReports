@@ -32,6 +32,7 @@ from modules.writers.deepdive_sheets import (
     write_weekly_deepdive,
     write_tblclass,
     write_export,
+    write_ct_dd_graphs,
 )
 from modules.writers.case_type_analysis import write_case_type_analysis
 from modules.writers.dyntarget_channel_sheet import write_dyntarget_channel
@@ -42,6 +43,7 @@ from modules.writers.pivot_charts_com import add_pivot_and_charts
 
 
 CRTX_CASETYPE = Path("reports_templates/charts/avgAHT_Volume_PrimaryCategory_CC.crtx")
+THEME_EG      = Path("reports_templates/charts/EG CC.thmx")
 
 
 DEFAULT_HISTORY = Path("data/dynamic_targets_history.json")
@@ -107,10 +109,11 @@ def cmd_generate(args) -> None:
     print(f"Scrittura workbook: {out_path} ...")
     wb = xlsxwriter.Workbook(str(out_path))
 
-    # Ordine dei fogli: deepdive (Weekly Deepdive, tblClass, EXPORT) prima di Case Type Analysis
+    # Ordine dei fogli: tblClass primo dopo DATASET, poi deepdive/grafici/export, poi Case Type Analysis
     write_dataset(wb, df_raw)
-    write_weekly_deepdive(wb, dd)
     write_tblclass(wb, dd)
+    write_weekly_deepdive(wb, dd)
+    write_ct_dd_graphs(wb, dd)
     write_export(wb, dd)
     cta_layout = write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive,
                                           selected, dd)
@@ -140,8 +143,8 @@ def cmd_generate(args) -> None:
 
     # Post-process COM: pivot interattiva + grafici .crtx sul foglio Case Type Analysis.
     # Deve essere l'ultimo writer: openpyxl (drill-down) non preserva pivot/grafici.
-    print("\nAggiunta pivot e grafici (Excel COM) al foglio Case Type Analysis ...")
-    add_pivot_and_charts(out_path, CRTX_CASETYPE, cta_layout)
+    print("\nAggiunta pivot e grafici + tema (Excel COM) ...")
+    add_pivot_and_charts(out_path, CRTX_CASETYPE, cta_layout, THEME_EG)
 
 
 # ── Subcomando: drill ─────────────────────────────────────────────────────────
