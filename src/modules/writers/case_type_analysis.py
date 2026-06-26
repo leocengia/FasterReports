@@ -27,18 +27,20 @@ _CHART1_ANCHOR = "L2"
 _CHART2_ANCHOR = "L20"
 
 
-def write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive):
+def write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive,
+                             selected_case_types, dd):
     """
     Scrive le tabelle G-J del foglio Case Type Analysis.
+    La tabella Case Type usa i case type selezionati dal deepdive (ordine Score),
+    con avg_aht/volume presi dal blocco 'All' di `dd` (coincidono col deepdive).
     Ritorna un dict con i range (formato A1) per pivot/grafici COM.
     """
     ws   = wb.add_worksheet("Case Type Analysis")
     fmts = make_formats(wb)
     target_blended = (float(target_phone) + float(target_nonlive)) / 2.0
 
-    # Tabella 1 — Case Type
-    n1 = _write_table(ws, fmts, df_raw, by_col="Case Type",
-                      hdr_row=_T1_HDR_ROW, label_hdr="case_type", target=target_blended)
+    # Tabella 1 — Case Type (selezionati dal deepdive)
+    n1 = _write_casetype_table(ws, fmts, dd, selected_case_types, target_blended)
     casetype_range = _range(_T1_HDR_ROW, n1) if n1 else None
 
     # Tabella 2 — Primary Category (se la colonna esiste)
@@ -64,6 +66,30 @@ def write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive):
 
 
 # ── Helper ────────────────────────────────────────────────────────────────────
+
+def _write_casetype_table(ws, fmts, dd, selected, target) -> int:
+    """
+    Tabella Case Type coi case type selezionati dal deepdive (nell'ordine dato),
+    con avg_aht/volume dal blocco 'All' di dd. Ritorna il numero di righe scritte.
+    """
+    headers = ["case_type", "avg_aht", "volume", "target"]
+    for i, h in enumerate(headers):
+        ws.write(_T1_HDR_ROW, _TABLE_COL + i, h, fmts["header"])
+
+    allr = dd[dd["channel"] == "All"].set_index("case_type") if dd is not None and not dd.empty else None
+    r = _T1_HDR_ROW + 1
+    n = 0
+    for ct in (selected or []):
+        if allr is None or ct not in allr.index:
+            continue
+        ws.write(r, _TABLE_COL,            str(ct),                          fmts["data_left"])
+        ws.write_number(r, _TABLE_COL + 1, float(allr.loc[ct, "aht"]),       fmts["data_num"])
+        ws.write_number(r, _TABLE_COL + 2, int(allr.loc[ct, "volume"]),      fmts["data_int"])
+        ws.write_number(r, _TABLE_COL + 3, float(target),                    fmts["data_num"])
+        r += 1
+        n += 1
+    return n
+
 
 def _write_table(ws, fmts, df_raw, by_col, hdr_row, label_hdr, target) -> int:
     """

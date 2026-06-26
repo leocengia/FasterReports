@@ -19,7 +19,7 @@ from pathlib import Path
 import xlsxwriter
 
 from modules.data_loader import load_csv, DataError
-from modules.classification import build_tbl_class
+from modules.classification import compute_deepdive, select_case_types
 from modules.dynamic_targets import (
     compute_dyn_targets,
     compute_channel_summary,
@@ -27,11 +27,11 @@ from modules.dynamic_targets import (
     get_tracked,
 )
 from modules.writers.dataset_sheet import write_dataset
-from modules.writers.wow_sheets import (
-    write_wow_pivot,
-    write_wow_monthly,
-    write_tbl_class,
-    write_wow_export,
+from modules.writers.wow_sheets import write_wow_pivot
+from modules.writers.deepdive_sheets import (
+    write_weekly_deepdive,
+    write_tblclass,
+    write_export,
 )
 from modules.writers.case_type_analysis import write_case_type_analysis
 from modules.writers.dyntarget_channel_sheet import write_dyntarget_channel
@@ -73,8 +73,10 @@ def cmd_generate(args) -> None:
 
     print(f"  {len(df)} righe caricate | canali: {df['channel'].value_counts().to_dict()}")
 
-    print("Calcolo classificazioni ...")
-    tbl = build_tbl_class(df)
+    print("Calcolo Case Type Deepdive ...")
+    dd       = compute_deepdive(df_raw, target_phone, target_nonlive)
+    selected = select_case_types(dd)
+    print(f"  Case type selezionati (per Score): {selected}")
 
     print("Calcolo Dynamic Targets ...")
     dyn_targets     = compute_dyn_targets(df)
@@ -105,9 +107,13 @@ def cmd_generate(args) -> None:
     print(f"Scrittura workbook: {out_path} ...")
     wb = xlsxwriter.Workbook(str(out_path))
 
-    # Ordine dei fogli
+    # Ordine dei fogli: deepdive (Weekly Deepdive, tblClass, EXPORT) prima di Case Type Analysis
     write_dataset(wb, df_raw)
-    cta_layout = write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive)
+    write_weekly_deepdive(wb, dd)
+    write_tblclass(wb, dd)
+    write_export(wb, dd)
+    cta_layout = write_case_type_analysis(wb, df_raw, week, target_phone, target_nonlive,
+                                          selected, dd)
     write_dyntarget_channel(wb, df, dyn_targets, channel_summary, "Phone")
     write_dyntarget_channel(wb, df, dyn_targets, channel_summary, "Non-live")
     write_dyntarget_master(wb, dyn_targets, channel_summary, int(week), week_date)
@@ -117,9 +123,6 @@ def cmd_generate(args) -> None:
         write_progress(wb, history, week)
 
     write_wow_pivot(wb, df)
-    write_wow_monthly(wb, df)
-    write_tbl_class(wb, df)
-    write_wow_export(wb, df)
 
     wb.close()
 

@@ -11,15 +11,19 @@ CHANNEL_MAP = {
     "Other": "Non-live",
 }
 
-# Configurazione soglie per canale
+# Configurazione soglie/parametri di classificazione per canale (tblParam).
+# NB: 'highly'/'actionable' sono soglie sullo SCORE composito (non più sull'OOT).
 CHANNEL_CONFIG = {
     "Phone": {
         "target_aht":   19.98,
         "min_vol":       20,
-        "highly":        0.75,
-        "actionable":    0.50,
+        "highly":        0.75,   # Highly_Threshold (su Score)
+        "actionable":    0.50,   # Actionable_Threshold (su Score)
         "impact_high":   0.02,
         "oot_mid":       0.20,
+        "oot_high":      0.30,
+        "var_high":      0.60,
+        "opp_rank_min":  0.50,
     },
     "Non-live": {
         "target_aht":   18.96,
@@ -28,6 +32,9 @@ CHANNEL_CONFIG = {
         "actionable":    0.50,
         "impact_high":   0.02,
         "oot_mid":       0.20,
+        "oot_high":      0.30,
+        "var_high":      0.60,
+        "opp_rank_min":  0.50,
     },
 }
 
